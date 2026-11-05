@@ -50,6 +50,7 @@ jobs:
             echo "| Test class | Tests | Failures | Errors | Time |"
             echo "|---|---:|---:|---:|---:|"
             for f in target/surefire-reports/TEST-*.xml; do
+              [ -f "$f" ] || continue   # no results when the build itself failed
               name=$(basename "$f" .xml | sed 's/^TEST-com\.niranjankagri\.checkout\.//')
               line=$(grep -m1 -o '<testsuite [^>]*>' "$f")
               get() { echo "$line" | grep -o " $1=\"[^\"]*\"" | cut -d'"' -f2; }
