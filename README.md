@@ -47,7 +47,8 @@ The clients are the real ones, using real HTTP on a local port. Only the base UR
 | `RecordAndReplayTest` | Recording through a proxy, then replaying without the provider | 2 |
 
 **59 tests** from 35 test methods. The method names start with their case ID, for example
-`tc122_everyAttemptCarriesTheSameIdempotencyKey`.
+`tc122_everyAttemptCarriesTheSameIdempotencyKey`, and each case is written out in
+[docs/manual-test-cases.md](docs/manual-test-cases.md).
 
 Retry waits are recorded, not slept through, so the whole suite runs in about 10 seconds and the waits themselves are
 asserted. Only the timeout tests really wait.
@@ -66,13 +67,22 @@ Java 21 or newer is all it needs: no Docker, no accounts, no network beyond Mave
 |---|---|---|
 | Stub object (the page object of API mocking) | `stubs/PaymentProviderStub`, `stubs/ShippingCarrierStub` | Paths, headers and WireMock calls live in one place; tests read as behaviour: `provider.unavailableThenCaptures(2)` |
 | Test data builder | `support/CheckoutRequests` | A test states only the value it is about |
-| Factory | `support/TestClients` | The real clients, built one way and pointed at WireMock |
+| Factory | `support/TestClients`, `support/MockServers` | The real clients pointed at WireMock; every server with the same strict settings |
 | Base class | `MockedApisTest` | One life cycle for the servers and clients |
 | Strategy | `Sleeper`, `support/RecordingSleeper` | Retry timing can be asserted without waiting |
 | Facade | `CheckoutService` | The one entry point the shop calls |
 
 **A strict default.** The stubs only match well-formed requests, and the servers run with `failOnUnmatchedRequests`.
 If the client loses a header or calls the wrong path, the test fails even when its own assertions would pass.
+
+More in [docs/framework-design.md](docs/framework-design.md).
+
+## Documents
+
+- [Framework design](docs/framework-design.md): the decisions behind the client and the tests
+- [Manual test cases](docs/manual-test-cases.md): every case in plain language, by ID
+- [Interview questions](docs/interview-questions.md) ([PDF](docs/interview-questions.pdf)): 60 questions on API mocking,
+  answered with this project
 
 ## What this does not prove
 

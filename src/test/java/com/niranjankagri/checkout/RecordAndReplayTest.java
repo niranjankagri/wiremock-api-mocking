@@ -24,8 +24,11 @@ import org.junit.jupiter.api.Test;
 @DisplayName("Record and replay")
 class RecordAndReplayTest {
 
+    private static final Charge RECORDED = new Charge("ORD-7", 1_000, "EUR", "tok_visa");
+
     private final WireMockServer realProvider = new WireMockServer(wireMockConfig().dynamicPort());
     private final WireMockServer recorder = new WireMockServer(wireMockConfig().dynamicPort());
+    private PaymentClient client;
 
     @BeforeEach
     void startServers() {
@@ -35,6 +38,8 @@ class RecordAndReplayTest {
         realProvider.stubFor(post(urlPathEqualTo("/v1/payments")).willReturn(aResponse().withStatus(201)
                 .withHeader("Content-Type", "application/json")
                 .withBody("{\"id\":\"pay_recorded\",\"status\":\"captured\"}")));
+        // The client only knows the recorder: it can't tell whether a real provider is behind it
+        client = TestClients.payments(recorder.baseUrl(), new RecordingSleeper());
     }
 
     @AfterEach
@@ -45,15 +50,16 @@ class RecordAndReplayTest {
 
     @Test
     void tc171_aRecordedAnswerIsReplayedAfterTheProviderIsGone() {
-        PaymentClient client = TestClients.payments(recorder.baseUrl(), new RecordingSleeper());
-
+        // Given: one charge passes through the recorder to the provider, then the provider disappears
         recorder.startRecording(recordSpec().forTarget(realProvider.baseUrl()).makeStubsPersistent(false));
-        PaymentOutcome recorded = client.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        PaymentOutcome recorded = client.charge(RECORDED);
         SnapshotRecordResult stubs = recorder.stopRecording();
         realProvider.stop();
 
-        PaymentOutcome replayed = client.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When: the same charge again
+        PaymentOutcome replayed = client.charge(RECORDED);
 
+        // Then: the recorder answers alone, exactly as the provider did
         assertThat(stubs.getStubMappings()).hasSize(1);
         assertThat(recorded.paymentId()).isEqualTo("pay_recorded");
         assertThat(replayed).isEqualTo(recorded);
@@ -61,14 +67,13 @@ class RecordAndReplayTest {
 
     @Test
     void tc172_aRequestThatWasNeverRecordedIsNotAnsweredAsIfItWere() {
-        PaymentClient client = TestClients.payments(recorder.baseUrl(), new RecordingSleeper());
-
+        // Given
         recorder.startRecording(recordSpec().forTarget(realProvider.baseUrl()).makeStubsPersistent(false));
-        client.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        client.charge(RECORDED);
         recorder.stopRecording();
 
-        // The recording matches on the body, so another amount is a different request: WireMock answers 404
-        assertThatThrownBy(() -> client.charge("ORD-7", 2_000, "EUR", "tok_visa"))
+        // When / Then: the recording matches on the body, so another amount is a new request, and WireMock answers 404
+        assertThatThrownBy(() -> client.charge(new Charge("ORD-7", 2_000, "EUR", "tok_visa")))
                 .isInstanceOf(PaymentRejectedException.class)
                 .hasMessageContaining("HTTP 404");
     }

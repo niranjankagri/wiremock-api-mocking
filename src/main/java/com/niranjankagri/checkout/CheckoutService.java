@@ -23,9 +23,11 @@ public final class CheckoutService {
      * @throws PaymentRejectedException if the provider refuses the request itself, for example a wrong API key
      */
     public CheckoutResult checkout(CheckoutRequest request) {
+        // Shipping first: the customer pays one total, so the price must be known before the charge
         ShippingQuote quote = shipping.quote(request.postcode(), request.weightGrams());
         long total = request.amountCents() + quote.priceCents();
-        PaymentOutcome payment = payments.charge(request.orderId(), total, request.currency(), request.cardToken());
+        PaymentOutcome payment = payments.charge(
+                new Charge(request.orderId(), total, request.currency(), request.cardToken()));
         return new CheckoutResult(toStatus(payment), payment.paymentId(), payment.declineCode(), total,
                 quote.priceCents(), quote.estimated());
     }

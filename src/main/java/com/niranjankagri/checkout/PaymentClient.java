@@ -1,14 +1,10 @@
 package com.niranjankagri.checkout;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -21,8 +17,8 @@ import java.util.Set;
 public final class PaymentClient {
 
     private static final String CHARGES_PATH = "/v1/payments";
+    // Answers that can change on the next attempt. Other 4xx answers will not: the same request gets the same refusal.
     private static final Set<Integer> RETRYABLE = Set.of(429, 500, 502, 503, 504);
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final HttpClient http;
     private final ApiConfig config;
@@ -45,15 +41,13 @@ public final class PaymentClient {
     /**
      * Charges a card.
      *
-     * @param orderId     the order, used as the idempotency key
-     * @param amountCents the total in cents
-     * @param currency    the three-letter currency code
-     * @param cardToken   the provider's card token
+     * @param charge what to charge
      * @return captured, declined, or unknown when no clear answer came after every attempt
      * @throws PaymentRejectedException if the provider refuses the request itself (wrong key, invalid data)
      */
-    public PaymentOutcome charge(String orderId, long amountCents, String currency, String cardToken) {
-        HttpRequest request = chargeRequest(orderId, amountCents, currency, cardToken);
+    public PaymentOutcome charge(Charge charge) {
+        // Built once: every attempt sends the identical request, idempotency key included
+        HttpRequest request = chargeRequest(charge);
         String lastProblem = "no attempt made";
         try {
             for (int attempt = 1; attempt <= retryPolicy.maxAttempts(); attempt++) {
@@ -61,42 +55,36 @@ public final class PaymentClient {
                 try {
                     HttpResponse<String> response = http.send(request, HttpResponse.BodyHandlers.ofString());
                     if (!RETRYABLE.contains(response.statusCode())) {
+                        // A final answer, good or bad: stop trying
                         return read(response);
                     }
                     lastProblem = "HTTP " + response.statusCode();
                     retryAfter = response.headers().firstValue("Retry-After");
                 } catch (IOException e) {
-                    // A timeout or a broken connection says nothing about whether the provider took the money.
+                    // A timeout or a broken connection says nothing about whether the provider took the money
                     lastProblem = e.getClass().getSimpleName();
                 }
+                // No wait after the last attempt: nothing follows it
                 if (attempt < retryPolicy.maxAttempts()) {
                     sleeper.sleep(retryPolicy.delayAfter(attempt, retryAfter));
                 }
             }
         } catch (InterruptedException e) {
+            // Keep the flag set for the caller; the payment's state is as unclear as after a timeout
             Thread.currentThread().interrupt();
             return PaymentOutcome.unknown("interrupted");
         }
         return PaymentOutcome.unknown(lastProblem);
     }
 
-    private HttpRequest chargeRequest(String orderId, long amountCents, String currency, String cardToken) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        body.put("orderId", orderId);
-        body.put("amountCents", amountCents);
-        body.put("currency", currency);
-        body.put("cardToken", cardToken);
-        try {
-            return HttpRequest.newBuilder(config.baseUrl().resolve(CHARGES_PATH))
-                    .timeout(config.timeout())
-                    .header("Authorization", "Bearer " + config.apiKey())
-                    .header("Content-Type", "application/json")
-                    .header("Idempotency-Key", orderId)
-                    .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(body)))
-                    .build();
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Could not write the payment request", e);
-        }
+    private HttpRequest chargeRequest(Charge charge) {
+        return HttpRequest.newBuilder(config.baseUrl().resolve(CHARGES_PATH))
+                .timeout(config.timeout())
+                .header("Authorization", "Bearer " + config.apiKey())
+                .header("Content-Type", "application/json")
+                .header("Idempotency-Key", charge.orderId())
+                .POST(HttpRequest.BodyPublishers.ofString(JsonBodies.write(charge)))
+                .build();
     }
 
     private static PaymentOutcome read(HttpResponse<String> response) {
@@ -105,16 +93,16 @@ public final class PaymentClient {
             // 200: the provider's answer to a repeated idempotency key; 201: a new payment
             case 200, 201 -> readPayment(response.body());
             case 402 -> PaymentOutcome.declined(readDeclineCode(response.body()));
-            // The body is left out on purpose: it can echo request data into the logs.
+            // The body is left out on purpose: it can echo request data into the logs
             default -> throw new PaymentRejectedException("The payment provider refused the request: HTTP " + status);
         };
     }
 
     private static PaymentOutcome readPayment(String body) {
-        Optional<JsonNode> json = parse(body);
+        Optional<JsonNode> json = JsonBodies.parse(body);
         String id = json.map(node -> node.path("id").asText("")).orElse("");
         String state = json.map(node -> node.path("status").asText("")).orElse("");
-        // A success code with an unreadable body must not count as paid, nor as failed.
+        // A success code with an unreadable body must not count as paid, nor as failed
         if (id.isEmpty() || !"captured".equals(state)) {
             return PaymentOutcome.unknown("unreadable payment response");
         }
@@ -122,14 +110,10 @@ public final class PaymentClient {
     }
 
     private static String readDeclineCode(String body) {
-        return parse(body).map(node -> node.path("code").asText("")).filter(code -> !code.isEmpty()).orElse("unknown");
-    }
-
-    private static Optional<JsonNode> parse(String body) {
-        try {
-            return Optional.ofNullable(JSON.readTree(body));
-        } catch (JsonProcessingException e) {
-            return Optional.empty();
-        }
+        // A 402 is a clear refusal even when its reason cannot be read
+        return JsonBodies.parse(body)
+                .map(node -> node.path("code").asText(""))
+                .filter(code -> !code.isEmpty())
+                .orElse("unknown");
     }
 }

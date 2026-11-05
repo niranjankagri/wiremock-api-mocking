@@ -17,19 +17,28 @@ public final class CheckoutRequests {
         return new CheckoutRequests();
     }
 
-    /** @param value the order id @return this builder */
+    /**
+     * @param value the order id
+     * @return this builder
+     */
     public CheckoutRequests withOrderId(String value) {
         orderId = value;
         return this;
     }
 
-    /** @param value the goods total @return this builder */
+    /**
+     * @param value the goods total
+     * @return this builder
+     */
     public CheckoutRequests withAmountCents(long value) {
         amountCents = value;
         return this;
     }
 
-    /** @param value the card token @return this builder */
+    /**
+     * @param value the card token
+     * @return this builder
+     */
     public CheckoutRequests withCardToken(String value) {
         cardToken = value;
         return this;

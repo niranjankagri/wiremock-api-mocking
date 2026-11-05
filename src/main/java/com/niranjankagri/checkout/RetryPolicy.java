@@ -24,6 +24,7 @@ public record RetryPolicy(int maxAttempts, Duration firstDelay, Duration maxDela
                 // Retry-After can also be a date; that form falls back to the doubling delay
                 .filter(value -> value.matches("\\d{1,9}"))
                 .map(value -> Duration.ofSeconds(Long.parseLong(value)))
+                // 1L << n is 2 to the power n: the waits are 1x, 2x, 4x the first delay
                 .orElse(firstDelay.multipliedBy(1L << (attempt - 1)));
         return wait.compareTo(maxDelay) > 0 ? maxDelay : wait;
     }

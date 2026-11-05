@@ -12,14 +12,17 @@ import org.junit.jupiter.params.provider.EnumSource;
 @DisplayName("Payment network faults")
 class PaymentFaultTest extends MockedApisTest {
 
+    // @EnumSource runs the test once per WireMock fault, including any fault a later WireMock version adds
     @ParameterizedTest
     @EnumSource(Fault.class)
     void tc131_aBrokenConnectionEndsUnknownNeverFailed(Fault fault) {
+        // Given: every attempt breaks
         provider.breaksConnection(fault);
 
-        PaymentOutcome outcome = payments.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
 
-        // The provider may have taken the money before the connection broke
+        // Then: the provider may have taken the money before the connection broke
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.UNKNOWN);
         assertThat(provider.chargeCount()).isEqualTo(3);
     }
@@ -27,32 +30,40 @@ class PaymentFaultTest extends MockedApisTest {
     @ParameterizedTest
     @EnumSource(Fault.class)
     void tc132_oneBrokenConnectionIsRecoveredByARetry(Fault fault) {
+        // Given: the first attempt breaks, the second works
         provider.breaksConnectionOnceThenCaptures(fault);
 
-        PaymentOutcome outcome = payments.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
 
+        // Then: the same key both times, so the provider can recognise the second attempt as a repeat
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.CAPTURED);
         assertThat(provider.idempotencyKeys()).containsExactly("ORD-7", "ORD-7");
     }
 
     @Test
     void tc133_aProviderSlowerThanTheTimeoutEndsUnknown() {
+        // Given: 2 s per answer, against a 1 s timeout
         provider.capturesAfter(2_000);
 
-        PaymentOutcome outcome = payments.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
 
+        // Then: counted on the client side, because WireMock logs a delayed request only after its own delay
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.UNKNOWN);
         assertThat(outcome.problem()).isEqualTo("HttpTimeoutException");
-        // Counted on the client side: WireMock logs a delayed request only after its own delay has passed
         assertThat(sleeper.waits()).hasSize(2);
     }
 
     @Test
     void tc134_aSlowProviderWithinTheTimeoutIsFine() {
+        // Given: slow, but within the timeout
         provider.capturesAfter(300);
 
-        PaymentOutcome outcome = payments.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
 
+        // Then: no retry was needed
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.CAPTURED);
         assertThat(sleeper.waits()).isEmpty();
     }
