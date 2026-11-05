@@ -32,7 +32,9 @@ public final class PaymentProviderStub {
 
     private final WireMockExtension api;
 
-    /** @param api the WireMock server playing the provider */
+    /**
+     * @param api the WireMock server playing the provider
+     */
     public PaymentProviderStub(WireMockExtension api) {
         this.api = api;
     }
@@ -42,22 +44,34 @@ public final class PaymentProviderStub {
         api.stubFor(charge().willReturn(captured()));
     }
 
-    /** Takes this long to capture a payment. @param millis the delay */
+    /**
+     * Takes this long to capture a payment.
+     * @param millis the delay
+     */
     public void capturesAfter(int millis) {
         api.stubFor(charge().willReturn(captured().withFixedDelay(millis)));
     }
 
-    /** Refuses the card. @param code the provider's reason */
+    /**
+     * Refuses the card.
+     * @param code the provider's reason
+     */
     public void declines(String code) {
         api.stubFor(charge().willReturn(json(402, "{\"code\":\"" + code + "\"}")));
     }
 
-    /** Answers with this status and an empty body. @param status the HTTP status */
+    /**
+     * Answers with this status and an empty body.
+     * @param status the HTTP status
+     */
     public void answers(int status) {
         api.stubFor(charge().willReturn(aResponse().withStatus(status)));
     }
 
-    /** Answers a charge with a success code and this body. @param body the body */
+    /**
+     * Answers a charge with a success code and this body.
+     * @param body the body
+     */
     public void answersCreatedWith(String body) {
         api.stubFor(charge().willReturn(json(201, body)));
     }
@@ -67,22 +81,34 @@ public final class PaymentProviderStub {
         api.stubFor(post(urlPathEqualTo(PATH)).willReturn(json(401, "{\"code\":\"invalid_api_key\"}")));
     }
 
-    /** Rate-limits one request, then captures. @param retryAfter the {@code Retry-After} header's value */
+    /**
+     * Rate-limits one request, then captures.
+     * @param retryAfter the {@code Retry-After} header's value
+     */
     public void rateLimitsOnceThenCaptures(String retryAfter) {
         failThenCapture(1, aResponse().withStatus(429).withHeader("Retry-After", retryAfter));
     }
 
-    /** Fails with 503 this many times, then captures. @param times the number of failures */
+    /**
+     * Fails with 503 this many times, then captures.
+     * @param times the number of failures
+     */
     public void unavailableThenCaptures(int times) {
         failThenCapture(times, aResponse().withStatus(503));
     }
 
-    /** Breaks the connection on every charge. @param fault how it breaks */
+    /**
+     * Breaks the connection on every charge.
+     * @param fault how it breaks
+     */
     public void breaksConnection(Fault fault) {
         api.stubFor(charge().willReturn(aResponse().withFault(fault)));
     }
 
-    /** Breaks the connection once, then captures. @param fault how it breaks */
+    /**
+     * Breaks the connection once, then captures.
+     * @param fault how it breaks
+     */
     public void breaksConnectionOnceThenCaptures(Fault fault) {
         failThenCapture(1, aResponse().withFault(fault));
     }
@@ -100,7 +126,9 @@ public final class PaymentProviderStub {
         return charges().size();
     }
 
-    /** @return the {@code Idempotency-Key} of each request, in order */
+    /**
+     * @return the {@code Idempotency-Key} of each request, in order
+     */
     public List<String> idempotencyKeys() {
         return charges().stream().map(request -> request.getHeader("Idempotency-Key")).toList();
     }
@@ -110,7 +138,10 @@ public final class PaymentProviderStub {
         return charges().stream().map(LoggedRequest::getUrl).toList();
     }
 
-    /** Fails unless exactly one request had this JSON body. @param json the expected body */
+    /**
+     * Fails unless exactly one request had this JSON body.
+     * @param json the expected body
+     */
     public void verifyChargedExactly(String json) {
         api.verify(1, postRequestedFor(urlPathEqualTo(PATH)).withRequestBody(equalToJson(json)));
     }

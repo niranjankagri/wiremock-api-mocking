@@ -14,49 +14,74 @@ import com.github.tomakehurst.wiremock.verification.LoggedRequest;
 import com.niranjankagri.checkout.support.TestClients;
 import java.util.List;
 
-/** The shipping carrier as the tests see it. Same idea as {@link PaymentProviderStub}. */
+/**
+ * The shipping carrier as the tests see it. Same idea as {@link PaymentProviderStub}.
+ */
 public final class ShippingCarrierStub {
 
     private static final String PATH = "/v1/rates";
 
     private final WireMockExtension api;
 
-    /** @param api the WireMock server playing the carrier */
+    /**
+     * @param api the WireMock server playing the carrier
+     */
     public ShippingCarrierStub(WireMockExtension api) {
         this.api = api;
     }
 
-    /** Quotes this price for any well-formed request. @param cents the price */
+    /**
+     * Quotes this price for any well-formed request.
+     * @param cents the price
+     */
     public void quotes(long cents) {
-        answersWith("{\"priceCents\":" + cents + ",\"carrier\":\"DHL\"}");
+        answersWith(priceBody(cents));
     }
 
-    /** Quotes this price for exactly this postcode and weight. */
+    /**
+     * Quotes this price for exactly this postcode and weight.
+     *
+     * @param postcode    the postcode to match
+     * @param weightGrams the weight to match
+     * @param cents       the price
+     */
     public void quotesFor(String postcode, int weightGrams, long cents) {
         api.stubFor(rates()
                 .withQueryParam("postcode", equalTo(postcode))
                 .withQueryParam("weightGrams", equalTo(String.valueOf(weightGrams)))
-                .willReturn(aResponse().withStatus(200).withBody("{\"priceCents\":" + cents + "}")));
+                .willReturn(aResponse().withStatus(200).withBody(priceBody(cents))));
     }
 
-    /** Answers 200 with this body. @param body the body */
+    /**
+     * Answers 200 with this body.
+     * @param body the body
+     */
     public void answersWith(String body) {
         api.stubFor(rates().willReturn(aResponse().withStatus(200).withBody(body)));
     }
 
-    /** Answers with this status. @param status the HTTP status */
+    /**
+     * Answers with this status.
+     * @param status the HTTP status
+     */
     public void answers(int status) {
         api.stubFor(rates().willReturn(aResponse().withStatus(status)));
     }
 
-    /** Breaks the connection. @param fault how it breaks */
+    /**
+     * Breaks the connection.
+     * @param fault how it breaks
+     */
     public void breaksConnection(Fault fault) {
         api.stubFor(rates().willReturn(aResponse().withFault(fault)));
     }
 
-    /** Answers later than the client waits. @param millis the delay */
+    /**
+     * Answers later than the client waits.
+     * @param millis the delay
+     */
     public void quotesAfter(int millis) {
-        api.stubFor(rates().willReturn(aResponse().withStatus(200).withBody("{\"priceCents\":1}")
+        api.stubFor(rates().willReturn(aResponse().withStatus(200).withBody(priceBody(1))
                 .withFixedDelay(millis)));
     }
 
@@ -70,6 +95,11 @@ public final class ShippingCarrierStub {
         return api.findAll(getRequestedFor(urlPathEqualTo(PATH))).stream().map(LoggedRequest::getUrl).toList();
     }
 
+    private static String priceBody(long cents) {
+        return "{\"priceCents\":" + cents + ",\"carrier\":\"DHL\"}";
+    }
+
+    // Like the payment stub, this matches well-formed requests only
     private static MappingBuilder rates() {
         return get(urlPathEqualTo(PATH))
                 .withHeader("X-Api-Key", equalTo(TestClients.SHIPPING_API_KEY))

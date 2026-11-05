@@ -1,10 +1,9 @@
 package com.niranjankagri.checkout;
 
-import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
-
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.niranjankagri.checkout.stubs.PaymentProviderStub;
 import com.niranjankagri.checkout.stubs.ShippingCarrierStub;
+import com.niranjankagri.checkout.support.MockServers;
 import com.niranjankagri.checkout.support.RecordingSleeper;
 import com.niranjankagri.checkout.support.TestClients;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,12 +15,17 @@ import org.junit.jupiter.api.extension.RegisterExtension;
  */
 abstract class MockedApisTest {
 
+    /** A valid charge, for tests that are not about its values. */
+    protected static final Charge CHARGE = new Charge("ORD-7", 1_000, "EUR", "tok_visa");
+
+    // Static: one server per test class, because starting one for every test would dominate the run time
     @RegisterExtension
-    static final WireMockExtension PAYMENT_API = server();
+    static final WireMockExtension PAYMENT_API = MockServers.empty();
 
     @RegisterExtension
-    static final WireMockExtension SHIPPING_API = server();
+    static final WireMockExtension SHIPPING_API = MockServers.empty();
 
+    // Not static: JUnit creates a new test object per test, so each test gets an empty sleeper
     protected final RecordingSleeper sleeper = new RecordingSleeper();
     protected final PaymentProviderStub provider = new PaymentProviderStub(PAYMENT_API);
     protected final ShippingCarrierStub carrier = new ShippingCarrierStub(SHIPPING_API);
@@ -35,13 +39,5 @@ abstract class MockedApisTest {
         payments = TestClients.payments(PAYMENT_API.baseUrl(), sleeper);
         shipping = TestClients.shipping(SHIPPING_API.baseUrl());
         checkout = new CheckoutService(payments, shipping);
-    }
-
-    private static WireMockExtension server() {
-        return WireMockExtension.newInstance()
-                .options(wireMockConfig().dynamicPort())
-                // A request no stub matches (wrong path, a missing header) fails the test, whatever it asserts
-                .failOnUnmatchedRequests(true)
-                .build();
     }
 }

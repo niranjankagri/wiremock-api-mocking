@@ -14,20 +14,26 @@ class PaymentResponseTest extends MockedApisTest {
 
     @Test
     void tc111_aCapturedPaymentReturnsTheProvidersId() {
+        // Given: the stub builds the payment id from the request (response templating)
         provider.capturesPayments();
 
-        PaymentOutcome outcome = payments.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
 
+        // Then: pay_ORD-7 can only come from this request, so a hard-coded answer could not pass
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.CAPTURED);
         assertThat(outcome.paymentId()).isEqualTo("pay_ORD-7");
     }
 
     @Test
     void tc112_aDeclineKeepsTheProvidersReasonAndIsNotRetried() {
+        // Given
         provider.declines("insufficient_funds");
 
-        PaymentOutcome outcome = payments.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
 
+        // Then: a refusal is a final answer, so one request is enough
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.DECLINED);
         assertThat(outcome.declineCode()).isEqualTo("insufficient_funds");
         assertThat(provider.chargeCount()).isEqualTo(1);
@@ -35,9 +41,11 @@ class PaymentResponseTest extends MockedApisTest {
 
     @Test
     void tc113_aWrongApiKeyStopsAtOnce() {
+        // Given
         provider.refusesTheApiKey();
 
-        assertThatThrownBy(() -> payments.charge("ORD-7", 1_000, "EUR", "tok_visa"))
+        // When / Then: a loud failure, because this is a configuration fault and not a customer's problem
+        assertThatThrownBy(() -> payments.charge(CHARGE))
                 .isInstanceOf(PaymentRejectedException.class)
                 .hasMessageContaining("HTTP 401");
         assertThat(provider.chargeCount()).isEqualTo(1);
@@ -46,20 +54,24 @@ class PaymentResponseTest extends MockedApisTest {
     @ParameterizedTest(name = "HTTP {0}")
     @ValueSource(ints = {400, 403, 404, 409, 422})
     void tc114_otherClientErrorsAreNotRetried(int status) {
+        // Given
         provider.answers(status);
 
-        assertThatThrownBy(() -> payments.charge("ORD-7", 1_000, "EUR", "tok_visa"))
-                .isInstanceOf(PaymentRejectedException.class);
+        // When / Then: the same request would only get the same refusal
+        assertThatThrownBy(() -> payments.charge(CHARGE)).isInstanceOf(PaymentRejectedException.class);
         assertThat(provider.chargeCount()).isEqualTo(1);
     }
 
     @ParameterizedTest(name = "body: {0}")
     @ValueSource(strings = {"not json", "{}", "{\"id\":\"pay_1\"}", "{\"id\":\"pay_1\",\"status\":\"pending\"}"})
     void tc115_aSuccessCodeWithAnUnusableBodyIsNeitherPaidNorFailed(String body) {
+        // Given: a 201 that does not say the payment was captured
         provider.answersCreatedWith(body);
 
-        PaymentOutcome outcome = payments.charge("ORD-7", 1_000, "EUR", "tok_visa");
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
 
+        // Then
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.UNKNOWN);
     }
 }

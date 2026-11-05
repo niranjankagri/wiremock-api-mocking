@@ -1,8 +1,5 @@
 package com.niranjankagri.checkout;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -20,8 +17,6 @@ public final class ShippingClient {
 
     /** The price used when the carrier gives no usable answer. */
     public static final long FLAT_RATE_CENTS = 995;
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final HttpClient http;
     private final ApiConfig config;
@@ -50,6 +45,7 @@ public final class ShippingClient {
         } catch (IOException e) {
             return ShippingQuote.flatRate();
         } catch (InterruptedException e) {
+            // Keep the flag set for the caller
             Thread.currentThread().interrupt();
             return ShippingQuote.flatRate();
         }
@@ -68,14 +64,11 @@ public final class ShippingClient {
     }
 
     private static ShippingQuote readQuote(String body) {
-        try {
-            JsonNode price = JSON.readTree(body).path("priceCents");
-            // A negative price would lower the total charged, so it counts as no answer
-            return price.isIntegralNumber() && price.asLong() >= 0
-                    ? new ShippingQuote(price.asLong(), false)
-                    : ShippingQuote.flatRate();
-        } catch (JsonProcessingException e) {
-            return ShippingQuote.flatRate();
-        }
+        return JsonBodies.parse(body)
+                .map(json -> json.path("priceCents"))
+                // A negative price would lower the total charged, so it counts as no answer
+                .filter(price -> price.isIntegralNumber() && price.asLong() >= 0)
+                .map(price -> new ShippingQuote(price.asLong(), false))
+                .orElseGet(ShippingQuote::flatRate);
     }
 }
