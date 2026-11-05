@@ -1,0 +1,58 @@
+# CI: the whole suite on every push. WireMock runs inside the tests, so a plain runner is enough: no Docker, no
+# services, no calls to any real API.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, without a code change: a broken dependency shows up within a week
+    - cron: '45 23 * * 5'   # Friday 23:45 UTC
+  workflow_dispatch:
+
+# Grouped per event too, so the weekly run and a push run on main never cancel each other
+concurrency:
+  group: ci-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: WireMock tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Build and test
+        run: ./mvnw -B verify
+      - name: Keep the JUnit results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: junit-wiremock
+          path: target/surefire-reports/TEST-*.xml
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Test summary
+        if: ${{ !cancelled() }}
+        run: |
+          {
+            echo "## Test results"
+            echo ""
+            echo "| Test class | Tests | Failures | Errors | Time |"
+            echo "|---|---:|---:|---:|---:|"
+            for f in target/surefire-reports/TEST-*.xml; do
+              name=$(basename "$f" .xml | sed 's/^TEST-com\.niranjankagri\.checkout\.//')
+              line=$(grep -m1 -o '<testsuite [^>]*>' "$f")
+              get() { echo "$line" | grep -o " $1=\"[^\"]*\"" | cut -d'"' -f2; }
+              echo "| $name | $(get tests) | $(get failures) | $(get errors) | $(get time) s |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
