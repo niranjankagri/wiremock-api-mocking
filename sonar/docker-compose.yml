@@ -1,0 +1,10 @@
+# A throwaway SonarQube server, used the same way on a laptop and in CI. No volumes: it starts
+# empty every time, so sonar/setup.sh creates everything it needs and no account is involved.
+services:
+  sonarqube:
+    image: sonarqube:26.11.0.134175-community
+    ports:
+      - "9000:9000"
+    environment:
+      # Its search engine otherwise refuses to start on hosts with a low vm.max_map_count
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"

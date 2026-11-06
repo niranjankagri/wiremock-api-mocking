@@ -7,13 +7,14 @@ Java. Every case has an ID, and the JUnit method that covers it starts with the 
 | ID range | Area | Automated in |
 |---|---|---|
 | TC-101 to TC-103 | Payment requests | `PaymentRequestTest` |
-| TC-111 to TC-115 | Payment responses | `PaymentResponseTest` |
+| TC-111 to TC-116 | Payment responses | `PaymentResponseTest` |
 | TC-121 to TC-127 | Payment retries | `PaymentRetryTest` |
-| TC-131 to TC-134 | Payment network faults | `PaymentFaultTest` |
-| TC-141 to TC-146 | Shipping quotes | `ShippingQuoteTest` |
+| TC-131 to TC-135 | Payment network faults | `PaymentFaultTest` |
+| TC-141 to TC-147 | Shipping quotes | `ShippingQuoteTest` |
 | TC-151 to TC-156 | Checkout flow | `CheckoutFlowTest` |
 | TC-161 to TC-162 | JSON mapping files | `MappingFilesTest` |
 | TC-171 to TC-172 | Record and replay | `RecordAndReplayTest` |
+| TC-181 to TC-182 | Checkout request rules | `CheckoutRequestTest` |
 
 ## How to run one case
 
@@ -46,6 +47,7 @@ and a flat shipping rate of 9.95.
 | TC-113 | Answer `401` | Charge | `PaymentRejectedException` naming HTTP 401; 1 request |
 | TC-114 | Answer `400`, `403`, `404`, `409`, `422` (one run each) | Charge | `PaymentRejectedException`; 1 request |
 | TC-115 | Answer `201` with: not JSON, `{}`, no status, status `pending` (one run each) | Charge | Unknown: neither paid nor failed |
+| TC-116 | Answer `402` with an empty reason | Charge | Declined, reason `unknown` |
 
 ## Payment retries
 
@@ -67,6 +69,7 @@ and a flat shipping rate of 9.95.
 | TC-132 | Break the connection once, with each fault, then capture | Charge | Captured; 2 requests with the same key |
 | TC-133 | Answer after 2 s | Charge | Unknown, problem `HttpTimeoutException`; 2 waits |
 | TC-134 | Answer after 300 ms | Charge | Captured; no retry |
+| TC-135 | Provider captures; thread already interrupted | Charge | Unknown, problem `interrupted`; thread still interrupted |
 
 The four faults are: empty response, malformed response chunk, random data then close, and connection reset by peer.
 
@@ -80,6 +83,7 @@ The four faults are: empty response, malformed response chunk, random data then 
 | TC-144 | Break the connection, with each fault (one run each) | Ask for a quote | Flat rate, estimated |
 | TC-145 | Answer `200` with: not JSON, `{}`, a text price, a negative price (one run each) | Ask for a quote | Flat rate, estimated |
 | TC-146 | Answer after 2 s | Ask for a quote | Flat rate, estimated |
+| TC-147 | Carrier quotes; thread already interrupted | Ask for a quote | Flat rate, estimated; thread still interrupted |
 
 ## Checkout flow
 
@@ -105,3 +109,10 @@ The four faults are: empty response, malformed response chunk, random data then 
 |---|---|---|---|
 | TC-171 | Record one charge through WireMock, then stop the provider | Send the same charge | 1 stub recorded; same answer without the provider |
 | TC-172 | Record one charge | Send another amount | `404` from WireMock: no recorded answer for a different request |
+
+## Checkout request rules
+
+| ID | Setup | Action | Expected |
+|---|---|---|---|
+| TC-181 | Nothing | Create a request with the smallest valid values | Accepted |
+| TC-182 | Nothing | Create a request with: no or blank order id, card token or postcode; amount 0 or -1; currency missing, `eur` or `EURO`; weight 0 or -5 (one run each) | `IllegalArgumentException` naming the field |

@@ -1,5 +1,5 @@
-# CI: the whole suite on every push. WireMock runs inside the tests, so a plain runner is enough: no Docker, no
-# services, no calls to any real API.
+# CI: the whole suite on every push. WireMock runs inside the tests, so the test job needs no Docker, no services
+# and no calls to any real API. A second job runs the same tests with coverage and checks the SonarQube quality gate.
 name: CI
 
 on:
@@ -57,3 +57,25 @@ jobs:
               echo "| $name | $(get tests) | $(get failures) | $(get errors) | $(get time) s |"
             done
           } >> "$GITHUB_STEP_SUMMARY"
+
+  sonarqube:
+    name: SonarQube quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Same throwaway server as on a laptop: no SonarCloud account and no stored secret
+      - name: Start SonarQube
+        run: docker compose -f sonar/docker-compose.yml up -d
+      - name: Prepare the server and its quality gate
+        run: sonar/setup.sh
+      - name: Test, analyse and check the quality gate
+        run: sonar/scan.sh
+      - name: Results in the job summary
+        if: ${{ !cancelled() }}
+        run: sonar/report.sh >> "$GITHUB_STEP_SUMMARY" || true

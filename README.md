@@ -38,15 +38,16 @@ The clients are the real ones, using real HTTP on a local port. Only the base UR
 | Test class | WireMock feature | Tests |
 |---|---|---:|
 | `PaymentRequestTest` | Request matching on headers, exact JSON body, request verification | 3 |
-| `PaymentResponseTest` | Response templating; each answer the provider can give | 12 |
+| `PaymentResponseTest` | Response templating; each answer the provider can give | 13 |
 | `PaymentRetryTest` | Stateful scenarios: a different answer on each attempt | 7 |
-| `PaymentFaultTest` | Fault injection (all 4 WireMock faults) and fixed delays | 10 |
-| `ShippingQuoteTest` | Query parameter matching, faults, delays, invalid bodies | 17 |
+| `PaymentFaultTest` | Fault injection (all 4 WireMock faults), fixed delays, interrupts | 11 |
+| `ShippingQuoteTest` | Query parameter matching, faults, delays, invalid bodies, interrupts | 18 |
 | `CheckoutFlowTest` | Two mock servers together; idempotent repeat of a checkout | 6 |
 | `MappingFilesTest` | Stubs as JSON files, `__files` response bodies, stub priority | 2 |
 | `RecordAndReplayTest` | Recording through a proxy, then replaying without the provider | 2 |
+| `CheckoutRequestTest` | None: plain rules, no HTTP | 12 |
 
-**59 tests** from 35 test methods. The method names start with their case ID, for example
+**74 tests** from 40 test methods. The method names start with their case ID, for example
 `tc122_everyAttemptCarriesTheSameIdempotencyKey`, and each case is written out in
 [docs/manual-test-cases.md](docs/manual-test-cases.md).
 
@@ -60,6 +61,28 @@ asserted. Only the timeout tests really wait.
 ```
 
 Java 21 or newer is all it needs: no Docker, no accounts, no network beyond Maven's downloads.
+
+## Code quality: SonarQube
+
+Every push also runs the tests with JaCoCo coverage and analyses the code on a throwaway SonarQube Community server, in
+Docker. The build fails if the quality gate fails. No SonarCloud account or stored secret is involved.
+
+| Measure (all code, not only new code) | Limit | Now |
+|---|---:|---:|
+| Reliability, security and maintainability ratings | A | A |
+| Coverage | at least 90 % | 98.8 % |
+| Duplicated lines | at most 3 % | 0 % |
+
+To run it locally, with Docker running (on Windows, from Git Bash):
+
+```
+docker compose -f sonar/docker-compose.yml up -d
+sonar/setup.sh
+sonar/scan.sh
+```
+
+The results are at http://localhost:9000: sign in as `admin` with the random password in `sonar/.password`. The CI job
+prints the gate and any open issues in its run summary.
 
 ## Design
 

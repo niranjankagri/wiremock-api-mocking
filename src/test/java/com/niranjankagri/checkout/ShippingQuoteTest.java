@@ -74,4 +74,20 @@ class ShippingQuoteTest extends MockedApisTest {
         // When / Then
         assertThat(shipping.quote("10115", 1_200)).isEqualTo(FLAT_RATE);
     }
+
+    @Test
+    void tc147_anInterruptedQuoteGivesTheFlatRateAndStaysInterrupted() {
+        // Given: the thread is interrupted before the call
+        carrier.quotesFor("10115", 1_200, 650);
+        Thread.currentThread().interrupt();
+
+        // When
+        ShippingQuote quote = shipping.quote("10115", 1_200);
+        // Reading the flag also clears it, so the next test starts clean
+        boolean stillInterrupted = Thread.interrupted();
+
+        // Then
+        assertThat(stillInterrupted).isTrue();
+        assertThat(quote).isEqualTo(FLAT_RATE);
+    }
 }
