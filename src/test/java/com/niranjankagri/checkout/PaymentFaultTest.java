@@ -67,4 +67,21 @@ class PaymentFaultTest extends MockedApisTest {
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.CAPTURED);
         assertThat(sleeper.waits()).isEmpty();
     }
+
+    @Test
+    void tc135_anInterruptedChargeEndsUnknownAndStaysInterrupted() {
+        // Given: the thread is interrupted before the call
+        provider.capturesPayments();
+        Thread.currentThread().interrupt();
+
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
+        // Reading the flag also clears it, so the next test starts clean
+        boolean stillInterrupted = Thread.interrupted();
+
+        // Then: the caller can still see the interrupt, and the payment isn't reported as failed
+        assertThat(stillInterrupted).isTrue();
+        assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.UNKNOWN);
+        assertThat(outcome.problem()).isEqualTo("interrupted");
+    }
 }

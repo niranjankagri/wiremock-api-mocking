@@ -23,6 +23,7 @@ Why the project is built the way it is. The README says what it does and how to 
 | `stubs/` | What each API does next and what it received | WireMock Java API |
 | `support/` | Test data, the real clients pointed at WireMock, server settings | JUnit 6 |
 | `src/test/resources/wiremock` | Stubs as JSON files, for `MappingFilesTest` | WireMock mapping format |
+| `sonar/` | A throwaway analysis server, its quality gate, the scan and the report | SonarQube Community, JaCoCo |
 
 ## 3. The app is small on purpose
 
@@ -99,7 +100,36 @@ negative shipping prices accepted, a space sent as `+`, and an unknown payment s
 One break survived at first. WireMock decodes `+` and `%20` to the same query value, so `tc142` passed with the wrong
 encoding. It now also asserts the raw URL.
 
-## 10. Limits
+## 10. Code quality with SonarQube
+
+**A throwaway server.** `sonar/docker-compose.yml` starts SonarQube with no volume, and `sonar/setup.sh` prepares it from
+nothing. CI and a laptop run the same files. There's no SonarCloud account and no stored secret, and the price is that
+no history is kept between runs.
+
+**An own quality gate.** The built-in gate judges new code only. A new server sees no new code, so that gate would pass
+every time. `setup.sh` creates a gate that judges all of the code: A ratings, at least 90 % coverage, at most 3 %
+duplication.
+
+**What it found.** The first scan failed at 89.9 % coverage, and the gap was real: no test covered the rules in
+`CheckoutRequest` apart from a zero amount, or what happens when a thread is interrupted during a call. 15 tests now cover
+those, and an empty decline reason. Coverage is 98.8 %. I raised the coverage, not the limit. It found no issues in the
+code itself.
+
+**How I know the gate can fail.** Three planted problems, each run through the scan with all tests passing:
+
+| Planted | Result |
+|---|---|
+| Strings compared with `==` | Reliability rating C, gate failed (`java:S4973`) |
+| An MD5 hash | Security rating D, gate failed (`java:S4790`) |
+| 60 lines of untested code | Coverage 72.8 %, gate failed |
+
+The analysis isn't complete: the first planted file also held a certain null dereference, and it wasn't reported. Taking
+out the interrupt handling from both clients failed `tc135` and `tc147`, so those new tests can fail too.
+
+**A user token.** An analysis token can scan but gets a 403 from some result APIs, so `setup.sh` makes a user token,
+which `report.sh` also uses.
+
+## 11. Limits
 
 - A mock only knows what it was told, so these tests can't notice the real API changing. Contract tests cover that:
   see [pact-contract-testing](https://github.com/niranjankagri/pact-contract-testing).

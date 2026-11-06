@@ -74,4 +74,17 @@ class PaymentResponseTest extends MockedApisTest {
         // Then
         assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.UNKNOWN);
     }
+
+    @Test
+    void tc116_aDeclineWithAnEmptyReasonStillCountsAsDeclined() {
+        // Given
+        provider.declines("");
+
+        // When
+        PaymentOutcome outcome = payments.charge(CHARGE);
+
+        // Then
+        assertThat(outcome.state()).isEqualTo(PaymentOutcome.State.DECLINED);
+        assertThat(outcome.declineCode()).isEqualTo("unknown");
+    }
 }

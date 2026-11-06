@@ -6,3 +6,5 @@ target/
 .idea/
 *.iml
 .vscode/
+sonar/.token
+sonar/.password
