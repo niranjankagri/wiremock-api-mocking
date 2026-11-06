@@ -78,4 +78,4 @@ jobs:
         run: sonar/scan.sh
       - name: Results in the job summary
         if: ${{ !cancelled() }}
-        run: sonar/report.sh >> "$GITHUB_STEP_SUMMARY" || true
+        run: sonar/report.sh | tee -a "$GITHUB_STEP_SUMMARY"
